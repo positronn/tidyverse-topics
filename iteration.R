@@ -233,3 +233,5 @@ x %>%
 
 
 # 21.6 Dealing with failure 
+# https://r4ds.had.co.nz/iteration.html
+# https://jennybc.github.io/purrr-tutorial/
