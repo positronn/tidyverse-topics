@@ -130,3 +130,14 @@ df1 %>%
 # setdiff(x, y): return observations in x, but not in y.
 
 # Given this simple data:
+(df1 <- tibble(x = 1:2, y = c(1L, 1L)))
+(df2 <- tibble(x = 1:2, y = 1:2))
+
+intersect(df1, df2)
+
+# Note that we get 3 rows, not 4
+union(df1, df2)
+
+setdiff(df1, df2)
+
+setdiff(df2, df1)
