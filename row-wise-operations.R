@@ -172,4 +172,102 @@ out2
 
 
 # Modelling 
+# rowwise() data frames allow you to solve a variety of modelling problems
+# in what I think is a particularly elegant way. We’ll start by creating a nested data frame:
+by_cyl <- mtcars %>%
+    nest_by(cyl)
+by_cyl
 
+# This is a little different to the usual group_by() output: we have visibly changed
+# the structure of the data. Now we have three rows (one for each group), and we have a
+# list-col, data, that stores the data for that group. Also note that the output is rowwise();
+# this is important because it’s going to make working with that list of data frames much easier.
+# Once we have one data frame per row, it’s straightforward to make one model per row:
+mods <- by_cyl %>%
+    mutate(mod = list(lm(mpg ~ wt, data = data)))
+mods
+
+# And supplement that with one set of predictions per row:
+mods <- mods %>%
+    mutate(pred = list(predict(mod, data)))
+mods
+
+
+# You could then summarise the model in a variety of ways:
+mods %>%
+    summarise(rmse = sqrt(mean((pred - data$mpg) ^ 2)))
+
+mods %>%
+    summarise(rsq = summary(mod)$r.squared)
+
+mods %>% summarise(broom::glance(mod))
+
+
+# Or easily access the parameters of each model:
+mods %>% reframe(broom::tidy(mod))
+
+
+# Repeated function calls 
+# rowwise() doesn’t just work with functions that return a length-1 vector
+# (aka summary functions); it can work with any function if the result is a list.
+# This means that rowwise() and mutate() provide an elegant way to call a
+# function many times with varying arguments, storing the outputs alongside the inputs.
+
+# Simulations 
+# I think this is a particularly elegant way to perform simulations, because
+# it lets you store simulated values along with the parameters that generated them.
+# For example, imagine you have the following data frame that describes the properties
+# of 3 samples from the uniform distribution:
+df <- tribble(
+    ~ n, ~ min, ~ max,
+    1,     0,     1,
+    2,    10,   100,
+    3,   100,  1000,
+)
+
+df %>% 
+    rowwise() %>% 
+    mutate(data = list(runif(n, min, max))) 
+
+# unpackung values
+df %>% 
+    rowwise() %>% 
+    mutate(data = list(runif(n, min, max))) %>% 
+    pull(data) 
+
+
+# Note the use of list() here - runif() returns multiple values and a mutate()
+# expression has to return something of length 1. list() means that we’ll get a
+# list column where each row is a list containing multiple values. If you forget
+# to use list(), dplyr will give you a hint:
+df %>% 
+    rowwise() %>% 
+    mutate(data = runif(n, min, max))
+
+
+
+# Multiple combinations 
+# What if you want to call a function for every combination of inputs?
+# You can use expand.grid() (or tidyr::expand_grid()) to generate the data
+# frame and then repeat the same pattern as above:
+df <- expand.grid(mean = c(-1, 0, 1), sd = c(1, 10, 100))
+df %>% 
+    rowwise() %>% 
+    mutate(data = list(rnorm(10, mean, sd)))
+
+
+# Varying functions 
+# In more complicated problems, you might also want to vary the function being called.
+# This tends to be a bit more of an awkward fit with this approach because the columns
+# in the input tibble will be less regular. But it’s still possible, and it’s a natural
+# place to use do.call():
+df <- tribble(
+    ~rng,     ~params,
+    "runif",  list(n = 10), 
+    "rnorm",  list(n = 20),
+    "rpois",  list(n = 10, lambda = 5),
+) %>%
+    rowwise()
+
+df %>% 
+    mutate(data = list(do.call(rng, params)))
