@@ -368,3 +368,251 @@ simple_map2_dbl <- function(x, y, f, ...) {
 # when needed. This is helpful when writing functions; in scripts you’d
 # generally just use the simpler form directly.
 
+# 9.4.3 No outputs: walk() and friends 
+# some functions do not return values or are not useful to us:
+
+welcome <- function(x) {
+    cat('Welcome', x, '!\n', sep = '')
+}
+
+names <- c('Marco', 'Hadley')
+
+map(names, welcome)
+# You could avoid this problem by assigning the results of map() to a
+# variable that you never use, but that would muddy the intent of the code.
+# Instead, purrr provides the walk family of functions that ignore the return
+# values of the .f and instead return .x invisibly55.
+
+walk(names, welcome)
+# the outputs are ephemeral, and the input is returned invisibly.
+
+# One of the most useful walk() variants is walk2() because a very common
+# side-effect is saving something to disk, and when saving something to
+# disk you always have a pair of values: the object and the path that you want to save it to.
+
+# For example, imagine you have a list of data frames 
+# and you’d like to save each one to a separate CSV file. That’s easy with walk2():
+temp <- tempfile()
+dir.create(temp)
+
+cyls <- split(mtcars, mtcars$cyl)
+paths <- file.path(temp, paste0('cyl-', names(cyls), '.csv'))
+walk2(cyls, paths, write.csv)
+
+dir(temp)
+
+#  9.4.4 Iterating over values and indices 
+# There are three basic ways to loop over a vector with a for loop:
+#
+# loop over the elements; `for (x in xs)`
+# loop over the numeric indices: `for (i in seq_along(xs))`
+# loop over the names: `for (nm in names(xs))`
+
+# The first form is analogous to the map() family. The
+# second and third forms are equivalent to the imap()
+# family which allows you to iterate over the values and
+# the indices of a vector in parallel.
+
+# imap() is like map2() in the sense that your .f gets called
+# with two arguments, but here both are derived from the vector.
+
+# imap(x, f) is equivalent to map2(x, names(x), f) if x has names,
+# and map2(x, seq_along(x), f) if it does not.
+
+# imap() is often useful for constructing labels:
+imap_chr(iris, ~ paste0('The first value of ', .y, ' is ', .x[[1]]))
+
+# If the vector is unnamed, the second argument will be the index:
+x <- map(1:6, ~ sample(1000, 10))
+imap_chr(x, ~ paste0('the highest value of ', .y, ' is ', max(.x)))
+
+# imap() is a useful helper if you want to work with the values in a vector along with their positions.
+
+
+#  9.4.5 Any number of inputs: pmap() and friends 
+# Since we have map() and map2(), you might expect map3(), map4(),
+# map5(), … But where would you stop? Instead of generalising map2() to
+# an arbitrary number of arguments, purrr takes a slightly different tack
+# with pmap(): you supply it a single list, which contains any number of
+# arguments. In most cases, that will be a list of equal-length vectors,
+# i.e. something very similar to a data frame. 
+
+# There’s a simple equivalence between map2() and pmap(): map2(x, y, f)
+# is the same as pmap(list(x, y), f).
+
+# The pmap() equivalent to the map2_dbl(xs, ws, weighted.mean) used above is:
+pmap_dbl(list(xs, ws), weighted.mean)
+
+# As before, the varying arguments come before .f (although now they must be wrapped in a list),
+# and the constant arguments come afterwards.
+pmap_dbl(list(xs, ws), weighted.mean, na.rm = TRUE)
+
+
+# A big difference between pmap() and the other map functions is that
+# pmap() gives you much finer control over argument matching because
+# you can name the components of the list. Returning to our example from
+# Section 9.2.5, where we wanted to vary the trim argument to x, we
+# could instead use pmap():
+trims <- c(0, 0.1, 0.2, 0.5)
+x <- rcauchy(1000)
+
+pmap_dbl(list(trim = trims), mean, x = x)
+
+
+# draw random uniform numbers with varying parameters:
+params <- tibble::tribble(
+    ~ n, ~ min, ~ max,
+     1L,     0,     1,
+     2L,    10,   100,
+     3L,   100,  1000,
+     4L,  1000, 10000
+)
+pmap(params, runif)
+
+
+# There are two base equivalents to the pmap() family: Map() and
+# mapply(). Both have significant drawbacks:
+# Map() vectorises over all arguments so you cannot supply arguments that do not vary.
+# mapply() is the multidimensional version of sapply(); conceptually it
+# takes the output of Map() and simplifies it if possible.
+# This gives it similar issues to sapply(). There is no multi-input
+# equivalent of vapply().
+
+
+#  9.5 Reduce family 
+# After the map family, the next most important family of functions is
+# the reduce family. This family is much smaller, with only two main
+# variants, and is used less commonly, but it’s a powerful idea,
+# gives us the opportunity to discuss some useful algebra, and powers
+# the map-reduce framework frequently used for processing very large datasets.
+
+#  9.5.1 Basics 
+# reduce() takes a vector of length n and produces a vector of length 1 by
+# calling a function with a pair of values at a time: reduce(1:4, f)
+# is equivalent to f(f(f(1, 2), 3), 4).
+# reduce() takes a vector of length n and produces a vector of
+# length 1 by calling a function with a pair of values at a time:
+# reduce(1:4, f) is equivalent to f(f(f(1, 2), 3), 4).
+
+# reduce() is a useful way to generalise a function that works with two
+# inputs (a binary function) to work with any number of inputs.
+# Imagine you have a list of numeric vectors, and you want to find
+# the values that occur in every element. First we generate some sample data:
+l <- map(1:4, ~ sample(1:10, 15, replace = TRUE))
+str(l)
+
+# To solve this challenge we need to use intersect() repeatedly:
+out <- l[[1]]
+out <- intersect(out, l[[2]])
+out <- intersect(out, l[[3]])
+out <- intersect(out, l[[4]])
+out
+
+# reduce() automates this solution for us, so we can write:
+reduce(l, intersect)
+
+# We could apply the same idea if we wanted to list all the elements
+# that appear in at least one entry. All we have to do is
+# switch from intersect() to union():
+reduce(l, union)
+
+# As usual, the essence of reduce() can be reduced to a simple
+# wrapper around a for loop:
+simple_reduce <- function(x, f) {
+    out <- x[[1]]
+    for (i in seq(2, length(x))) {
+        out <- f(out, x[[i]])
+    }
+    out
+}
+simple_reduce(l, union)
+
+# The base equivalent is Reduce(). Note that the argument order
+# is different: the function comes first, followed by the vector,
+# and there is no way to supply additional arguments.
+
+
+#  9.5.2 Accumulate 
+# The first reduce() variant, accumulate(), is useful for understanding
+# how reduce works, because instead of returning just the final result,
+# it returns all the intermediate results as well:
+accumulate(l, intersect)
+
+# Another useful way to understand reduce is to think about sum():
+# sum(x) is equivalent to x[[1]] + x[[2]] + x[[3]] + ..., i.e.
+# reduce(x, `+`). Then accumulate(x, `+`) is the cumulative sum:
+x <- 1:10
+reduce(x, `+`)
+
+accumulate(x, `+`)
+
+#  9.5.3 Output types 
+# In the above example using +, what should reduce() return when x
+# is short, i.e. length 1 or 0? Without additional arguments,
+# reduce() just returns the input when x is length 1:
+reduce(1, `+`)
+
+#This means that reduce() has no way to check that the input is valid:
+reduce('a', `+`)
+
+# What if it’s length 0? We get an error that suggests we need to
+# use the .init argument:
+reduce(integer(), `+`)
+
+
+# What should .init be here? To figure that out, we need to
+# see what happens when .init is supplied:
+# So if we call reduce(1, `+`, init) the result will be 1 + init.
+# Now we know that the result should be just 1, so that suggests
+# that .init should be 0:
+reduce(integer(), `+`, .init = 0)
+
+# This also ensures that reduce() checks that length 1 inputs are
+# valid for the function that you’re calling:
+reduce('a', `+`, .init = 0)
+
+# If you want to get algebraic about it, 0 is called the identity
+# of the real numbers under the operation of addition: if you add
+# a 0 to any number, you get the same number back. R applies the
+# same principle to determine what a summary function with a zero
+# length input should return:
+sum(integer())  # x + 0 = x
+prod(integer()) # x * 1 = x
+min(integer())  # min(x, Inf) = x
+max(integer())  # max(x, -Inf)
+
+
+# If you’re using reduce() in a function, you should always
+# supply .init. Think carefully about what your function should
+# return when you pass a vector of length 0 or 1, and make sure
+# to test your implementation.
+
+#  9.5.4 Multiple inputs 
+# Very occasionally you need to pass two arguments to the function
+# that you’re reducing. For example, you might have a list
+# of data frames that you want to join together, and the
+# variables you use to join will vary from element to element.
+# This is a very specialised scenario, so I don’t want to spend
+# much time on it, but I do want you to know that reduce2() exists.
+
+# The length of the second argument varies based on whether or
+# not .init is supplied: if you have four elements of x, f will
+# only be called three times. If you supply init, f will be
+# called four times.
+
+#  9.5.5 Map-reduce 
+# You might have heard of map-reduce, the idea that powers technology
+# like Hadoop. Now you can see how simple and powerful the
+# underlying idea is: map-reduce is a map combined with a reduce.
+# The difference for large data is that the data is spread over
+# multiple computers. Each computer performs the map on the data
+# that it has, then it sends the result to back to a coordinator
+# which reduces the individual results back to a single result.
+
+# As a simple example, imagine computing the mean of a very large vector,
+# so large that it has to be split over multiple computers.
+# You could ask each computer to calculate the sum and the length, and
+# then return those to the coordinator which computes the overall mean
+# by dividing the total sum by the total length.
+
+
