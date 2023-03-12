@@ -616,3 +616,114 @@ max(integer())  # max(x, -Inf)
 # by dividing the total sum by the total length.
 
 
+#  9.6 Predicate functionals 
+# A predicate is a function that returns a single TRUE or FALSE,
+# like is.character(), is.null(), or all(), and we say a
+# predicate matches a vector if it returns TRUE.
+
+#  9.6.1 Basics
+# A predicate functional applies a predicate to each
+# element of a vector. purrr provides seven useful functions
+# which come in three groups:
+#   *   `some(.x, .p)` returns TRUE if any element matches
+#               returns TRUE when it sees the first TRUE
+#       `every(.x, .p)` returns TRUE if all elements match
+#               return FALSE when it sees the first FALSE
+#       `none(.x, .p)` returns TRUE if no element matches
+#               return FALSE when it sees the first TRUE
+#   *   `detect(.x, .p)` returns the value of the first match
+#       `detect_index(.x, .p) returns the location of the first match.`
+#
+#   *   `keep(.x, .p)` keeps all matching elements
+#       `discard(.x, .p)` drops all matching elements
+
+df <- data.frame(x = 1:3,
+                 y = c('a', 'b', 'c'))
+detect(df, is.factor)
+detect_index(df, is.factor)
+
+str(keep(df, is.factor))
+str(discard(df, is.factor))
+
+#  9.6.2 Map variants 
+# map() and modify() come in variants that also take predicate
+# functions, transforming only the elements of .x where .p is TRUE.
+df <- data.frame(
+    num1 = c(0, 10, 20),
+    num2 = c(5, 6, 7),
+    chr1 = c('a', 'b', 'c'),
+    stringsAsFactors = FALSE
+)
+
+str(map_if(df, is.numeric, mean))
+str(modify_if(df, is.numeric, mean))
+
+str(map(keep(df, is.numeric), mean))
+
+
+#  9.7 Base functionals 
+
+#  9.7.1 Matrices and arrays
+# map() and friends are specialised to work with one-dimensiona
+# vectors. base::apply() is specialised to work with two-dimensional and
+# higher vectors, i.e. matrices and arrays. You can think of apply()
+# as an operation that summarises a matrix or array by collapsing
+# each row or column to a single value. It has four arguments:
+#       * X, the matrix or array to summarise
+#       * MARGIN, an integer vector giving the dimensions
+#           to summarise over, 1 = rows, 2 = columns,
+#           etc. (The argument name comes from thinking
+#           about the margins of a joint distribution.)
+#       * FUN, a summary function.
+#       * ... other arguments passed on to FUN.
+
+a2d <- matrix(1:20, nrow = 5)
+a2d
+apply(a2d, 1, mean)
+apply(a2d, 2, mean)
+
+# You can specify multiple dimensions to MARGIN, which is useful for high-dimensional arrays:
+a3d <- array(1:24, c(2, 3, 4))
+a3d
+apply(a3d, 3, mean)
+
+
+# There are two caveats to using apply():
+#   Like base::sapply(), you have no control over the output type;
+#       it will automatically be simplified to a list, matrix, or vector.
+#       However, you usually use apply() with numeric arrays and a numeric
+#       summary function so you are less likely to encounter a problem than with sapply().
+#   apply() is also not idempotent in the sense that if the summary function is the
+#       identity operator, the output is not always the same as the input.
+
+a1 <- apply(a2d, 1, identity)
+identical(a2d, a1)
+
+a2 <- apply(a2d, 2, identity)
+identical(a2d, a2)
+
+# Never use apply() with a data frame. It always coerces it to a matrix,
+# which will lead to undesirable results if your data frame contains
+# anything other than numbers.
+df <- data.frame(x = 1:3, y = c("a", "b", "c"))
+apply(df, 2, mean)
+
+#  9.7.2 Mathematical concerns 
+# 
+# Functionals are very common in mathematics. The limit, the maximum,
+# the roots (the set of points where f(x) = 0), and the definite integral
+# are all functionals: given a function, they return a single number
+# (or vector of numbers). At first glance, these functions don’t seem to
+# fit in with the theme of eliminating loops, but if you dig deeper
+# you’ll find out that they are all implemented using an algorithm
+# that involves iteration.
+
+# integrate() finds the area under the curve defined by f() 
+integrate(sin, 0, pi)
+
+#  uniroot() finds where f() hits zero
+str(uniroot(sin, pi * c(1 / 2, 3 / 2)))
+
+#  optimise() finds the location of the lowest (or highest) value of f() 
+str(optimise(sin, c(0, 2 * pi)))
+str(optimise(sin, c(0, pi), maximum = TRUE))
