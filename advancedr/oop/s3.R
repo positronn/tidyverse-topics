@@ -291,3 +291,97 @@ POSIXct(2020, 1, 1, tzone = 'America/New_York')
 # these patterns to make life as easy as possible for your users.
 
 
+#  13.4 Generics and methods 
+# The job of an S3 generic is to perform method dispatch, i.e. find the
+# specific implementation for a class. Method dispatch is performed
+# by UseMethod(), which every generic calls71. UseMethod() takes two
+# arguments: the name of the generic function (required), and the
+# argument to use for method dispatch (optional). If you omit the
+# second argument, it will dispatch based on the first argument,
+# which is almost always what is desired.
+
+mean
+
+# creating own generic 
+my_new_generic <- function(x) {
+    UseMethod('my_new_generic')
+}
+
+
+
+#  13.4.1 Method dispatch 
+# How does UseMethod() work? It basically creates a vector of method
+# names, paste0("generic", ".", c(class(x), "default")), and then
+# looks for each potential method in turn. We can see this in action
+# with sloop::s3_dispatch(). You give it a call to an S3 generic, and
+# it lists all the possible methods. For example, what method is called
+# when you print a Date object?
+x <- Sys.Date()
+s3_dispatch(print(x))
+
+# The output here is simple:
+#  => indicates the method that is called, here print.Date() 
+#  * indicates a method that is defined, but not called, here print.default().
+
+
+# The “default” class is a special pseudo-class. This is not a real
+# class, but is included to make it possible to define a standard
+# fallback that is found whenever a class-specific method is not available.
+
+# The essence of method dispatch is quite simple, but as the
+# chapter proceeds you’ll see it get progressively more complicated
+# to encompass inheritance, base types, internal generics, and group
+# generics. The code below shows a couple of more complicated cases
+# which we’ll come back to in Sections 14.2.4 and 13.7.
+x <- matrix(1:10, nrow = 2)
+s3_dispatch(mean(x))
+
+s3_dispatch(sum(Sys.time()))
+
+
+#  13.4.2 Finding methods 
+# sloop::s3_dispatch() lets you find the specific method used for
+# a single call. What if you want to find all methods defined for
+# a generic or associated with a class? That’s the job of
+# sloop::s3_methods_generic() and sloop::s3_methods_class():
+s3_methods_generic('mean')
+
+s3_methods_class('ordered')
+
+
+#  13.5 Object styles 
+# So far I’ve focussed on vector style classes like Date and factor.
+# These have the key property that length(x) represents the number of
+# observations in the vector. There are three variants that do not have
+# this property:
+
+# Record style objects use a list of equal-length vectors to represent
+# individual components of the object. The best example of this is
+# POSIXlt, which underneath the hood is a list of 11 date-time
+# components like year, month, and day. Record style classes
+# override length() and subsetting methods to conceal this
+# implementation detail.
+x <- as.POSIXlt(ISOdatetime(2020, 1, 1, 0, 0, 1:3))
+x
+length(x)
+length(unclass(x))
+
+x[[1]] # the first date time
+unclass(x)[[1]] # the first component, the number of seconds
+
+# Data frames are similar to record style objects in that both use
+# lists of equal length vectors. However, data frames are
+# conceptually two dimensional, and the individual components are
+# readily exposed to the user. The number of observations is the
+# number of rows, not the length:
+x <- data.frame(x = 1:100, y = 1:100)
+length(x)
+nrow(x)
+
+# Scalar objects typically use a list to represent a single thing.
+# For example, an lm object is a list of length 12 but it represents
+# one model.
+mod <- lm(mpg ~ wt, data = mtcars)
+length(mod)
+
+
