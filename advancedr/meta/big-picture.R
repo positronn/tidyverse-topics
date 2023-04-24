@@ -166,3 +166,58 @@ mtcars_db %>%
     show_query()
 
 DBI::dbDisconnect(con)
+
+#  17.7 Customising evaluation with data 
+# Rebinding functions is an extremely powerful technique, but it tends to
+# require a lot of investment. A more immediately practical application is
+# modifying evaluation to look for variables in a data frame instead of an
+# environment. This idea powers the base subset() and transform() functions,
+# as well as many tidyverse functions like ggplot2::aes() and dplyr::mutate().
+# It’s possible to use eval() for this, but there are a few potential pitfalls
+# so we’ll switch to rlang::eval_tidy() instead.
+# As well as expression and environment, eval_tidy() also takes a data mask,
+# which is typically a data frame:
+df <- data.frame(x = 1:5, y = sample(5))
+eval_tidy(expr(x + y), df)
+
+# Evaluating with a data mask is a useful technique for interactive analysis
+# because it allows you to write x + y rather than df$x + df$y. However, that
+# convenience comes at a cost: ambiguity. In Section 20.4 you’ll learn how to
+#deal with ambiguity using special .data and .env pronouns.
+# We can wrap this pattern up into a function by using enexpr().
+# This gives us a function very similar to base::with():
+with2 <- function(df, expr) {
+    eval_tidy(enexpr(expr), df)
+}
+with2(df, x + y)
+# Unfortunately, this function has a subtle bug and we need a new data structure to help deal with it.
+
+#  17.8 Quosures 
+# To make the problem more obvious, I’m going to modify with2(). The basic
+# problem still occurs without this modification but it’s much harder to see.
+with2 <- function(df, expr) {
+    a <- 1000
+    print(enexpr(expr))
+    eval_tidy(enexpr(expr), df)
+}
+# We can see the problem when we use with2() to refer to a variable called a.
+# We want the value of a to come from the binding we can see (10), not the
+# binding internal to the function (1000):
+df <- data.frame(x = 1:3)
+a <- 10
+with2(df, x + a)
+
+# The problem arises because we need to evaluate the captured expression in
+# the environment where it was written (where a is 10), not the environment
+# inside of with2() (where a is 1000).
+# Fortunately we can solve this problem by using a new data structure:
+# the quosure which bundles an expression with an environment. eval_tidy()
+# knows how to work with quosures so all we need to do is switch out
+# enexpr() for enquo():
+with2 <- function(df, expr) {
+    a <- 1000
+    print(enquo(expr))
+    eval_tidy(enquo(expr), df)
+}
+with2(df, x + a)
+# Whenever you use a data mask, you must always use enquo() instead of enexpr().
