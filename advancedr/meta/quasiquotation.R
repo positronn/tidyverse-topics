@@ -377,3 +377,55 @@ attr_name <- 'z'
     set_attr(w = 0, !!!attrs, !!attr_name := 3) %>% 
     str()
 
+
+#  19.6.2 exec() 
+# directly
+exec('mean', x = 1:10, na.rm = TRUE, trim = 0.1)
+
+# indirectly
+args <- list(x = 1:10, na.rm = TRUE, trim = 0.1)
+exec('mean', !!!args)
+
+# mixed
+params <- list(na.rm = TRUE, trim = 0.1)
+exec('mean', x = 1:10, !!!params)
+
+# rlang::exec() also makes it possible to supply argument names indirectly:
+arg_name <- 'na.rm'
+arg_val <- TRUE
+exec('mean', 1:10, !!arg_name := arg_val)
+
+# And finally, it’s useful if you have a vector of function names or a list of functions that you want to call with the same arguments:
+x <- c(runif(10), NA)
+x
+funs <- c('mean', 'median', 'sd')
+purrr::map_dbl(mean, exec, x, na.rm = TRUE)
+purrr::map_dbl(funs, exec, x, na.rm = TRUE)
+
+# exec() is closely related to call2(); where call2() returns an expression, exec() evaluates it.
+
+
+#  19.6.4 With base R
+# Base R provides a Swiss army knife to solve these problems: do.call(). do.call() has two main arguments. The first argument, what, gives a function to call. The second argument, args, is a list of arguments to pass to that function, and so do.call("f", list(x, y, z)) is equivalent to f(x, y, z).
+#] do.call() gives a straightforward solution to rbind()ing together many data frames:
+df1 <- data.frame(
+    y = 1:5,
+    z = 3:-1,
+    x = 5:1
+)
+df2 <- data.frame(
+    y = 1:5,
+    z = 3:-1,
+    x = 5:1
+)
+do.call("rbind", list(df1, df2))
+
+# With a little more work, we can use do.call() to solve the second problem. We first create a list of arguments, then name that, then use do.call():
+args <- list(val)
+
+names(args) <- var
+
+do.call("data.frame", args)
+
+
+#  19.7 Case studies 
