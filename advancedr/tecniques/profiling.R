@@ -203,3 +203,23 @@ bench::mark(
 
 #  25.2.4 Vector input, vector output 
 # Next we’ll create a function that computes the Euclidean distance between a value and a vector of values:
+pdistR <- function(x, ys) {
+    sqrt((x - ys) ^ 2)
+}
+
+cppFunction('NumericVector pdistC(double x, NumericVector ys) {
+  int n = ys.size();
+  NumericVector out(n);
+
+  for(int i = 0; i < n; ++i) {
+    out[i] = sqrt(pow(ys[i] - x, 2.0));
+  }
+  return out;
+}')
+
+
+y <- runif(1e6)
+bench::mark(
+    pdistR(0.5, y),
+    pdistC(0.5, y)
+)[1:6]
