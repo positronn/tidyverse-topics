@@ -429,3 +429,23 @@ do.call("data.frame", args)
 
 
 #  19.7 Case studies 
+
+library(tibble)
+library(dplyr)
+df <- tibble(
+    x = seq(1, 5, length.out = 100),
+    y = seq(1, 3, length.out = 100),
+    z = seq(1, 9, length.out = 100)
+) %>% 
+    mutate(w = y ** 2)
+
+df %>% 
+    select(x)
+
+x <- 'z'
+df %>% 
+    select(!!x)
+
+x <- c('w', 'z')
+df %>% 
+    select(!!x)
